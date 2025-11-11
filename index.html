@@ -1,1 +1,1567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Yone 1v1 Simulator</title>
+  <style>
+    body {
+      margin: 0;
+      background: radial-gradient(circle at top, #1b1f2c 0%, #090b12 65%);
+      color: #f0f4ff;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      height: 100vh;
+    }
+    header {
+      padding: 16px 0 8px;
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    #hud {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      width: min(960px, 90vw);
+      margin-bottom: 14px;
+      font-size: 14px;
+    }
+    .hud-block {
+      background: rgba(10, 15, 28, 0.8);
+      border: 1px solid rgba(120, 173, 255, 0.18);
+      border-radius: 12px;
+      padding: 12px 16px;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(6px);
+    }
+    .hud-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .hp-bar {
+      position: relative;
+      height: 18px;
+      border-radius: 12px;
+      overflow: hidden;
+      background: rgba(40, 52, 73, 0.8);
+      border: 1px solid rgba(175, 214, 255, 0.25);
+      margin-bottom: 8px;
+    }
+    .hp-fill {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, #ff585d 0%, #ff9573 100%);
+    }
+    .shield-fill {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, rgba(135, 227, 255, 0.85) 0%, rgba(71, 140, 255, 0.95) 100%);
+      mix-blend-mode: screen;
+    }
+    .hp-text {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+      text-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+    }
+    .lt-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      letter-spacing: 0.3px;
+      margin-bottom: 6px;
+    }
+    .lt-pips {
+      display: flex;
+      gap: 4px;
+    }
+    .lt-pip {
+      width: 14px;
+      height: 6px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.18);
+    }
+    .lt-pip.active {
+      background: linear-gradient(90deg, #ffe26f 0%, #ffad3a 100%);
+      box-shadow: 0 0 6px rgba(255, 198, 62, 0.8);
+    }
+    .cooldown-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      font-size: 11px;
+    }
+    .cd-cell {
+      background: rgba(30, 38, 60, 0.85);
+      border-radius: 8px;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      border: 1px solid rgba(102, 146, 255, 0.16);
+    }
+    .cd-label {
+      font-weight: 600;
+      letter-spacing: 0.6px;
+    }
+    .cd-track {
+      position: relative;
+      height: 6px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.12);
+      overflow: hidden;
+    }
+    .cd-fill {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, rgba(72, 123, 255, 0.9) 0%, rgba(163, 214, 255, 0.9) 100%);
+    }
+    canvas {
+      border: 2px solid #1f2738;
+      background: radial-gradient(circle at center, #1e2434 0%, #101320 70%);
+      max-width: 100%;
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+      border-radius: 18px;
+    }
+    #log {
+      width: min(960px, 100%);
+      height: 120px;
+      overflow-y: auto;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      margin: 12px 0;
+      padding: 8px 12px;
+      font-size: 12px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+    }
+    #controls {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    button {
+      padding: 8px 16px;
+      background: #2c3e55;
+      border: none;
+      color: #fff;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:hover {
+      background: #3f5575;
+    }
+    button:active {
+      background: #243346;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Yone 1v1 2D Simulator</h1>
+  </header>
+  <section id="hud"></section>
+  <canvas id="game"></canvas>
+  <div id="log"></div>
+  <div id="controls">
+    <button id="btn-reset">Reset</button>
+    <button id="btn-toggle-train">Toggle Training</button>
+    <button id="btn-clear-q">Clear Q-Table</button>
+  </div>
+  <script>
+    const BASE = { W: 1600, H: 900 };
+    const VIEW = { W: 1600, H: 900 };
+    const STEP = 1 / 60;
 
+    const CONST = {
+      MS: 345,
+      AA_RANGE: 175,
+      AS_BASE: 1.0,
+      WINDUP: 0.22,
+      Q12_CAST: 0.23,
+      Q3_CAST: 0.23,
+      Q12_CD: 2.5,
+      W_CD: 8.8,
+      FLASH_RANGE: 425,
+      FLASH_CD: 300,
+      Q3_TORNADO_SPEED: 1500,
+      Q3_TORNADO_RANGE: 1050,
+      Q3_DASH_SPEED: 1200,
+      Q3_BODY_R: 120,
+      Q3_AIR: 0.75,
+      LT_MAX: 6,
+      LT_PER: 0.06,
+      LT_DUR: 6.0,
+      DMG_AA: 20,
+      DMG_Q12: 25,
+      DMG_Q3_T: 10,
+      DMG_Q3_B: 15,
+      W_SHIELD: 10,
+      W_DMG: 10
+    };
+
+    const CC = { NONE: 0, AIR: 1 << 0, STUN: 1 << 1 };
+    const AA = { IDLE: 0, WIND: 1, BACK: 2 };
+    const QP = { IDLE: 0, Q12W: 1, Q3W: 2, Q3D: 3, DONE: 4 };
+
+    let S = 1;
+    const D = {};
+
+    function clamp(v, min, max) {
+      return Math.max(min, Math.min(max, v));
+    }
+
+    function clampPos(p) {
+      return {
+        x: clamp(p.x, 0, VIEW.W),
+        y: clamp(p.y, 0, VIEW.H)
+      };
+    }
+
+    function dist(a, b) {
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      return Math.hypot(dx, dy);
+    }
+
+    function dot(a, b) {
+      return a.x * b.x + a.y * b.y;
+    }
+
+    function norm(v) {
+      const len = Math.hypot(v.x, v.y);
+      if (!len) return { x: 1, y: 0 };
+      return { x: v.x / len, y: v.y / len };
+    }
+
+    function faceFromTo(from, to) {
+      return norm({ x: to.x - from.x, y: to.y - from.y });
+    }
+
+    function lerp(a, b, t) {
+      return a + (b - a) * t;
+    }
+
+    function applyScale() {
+      S = Math.min(VIEW.W / BASE.W, VIEW.H / BASE.H);
+      D.MS = CONST.MS * S;
+      D.AA_RANGE = CONST.AA_RANGE * S;
+      D.FLASH_RANGE = CONST.FLASH_RANGE * S;
+      D.Q3_TORNADO_SPEED = CONST.Q3_TORNADO_SPEED * S;
+      D.Q3_TORNADO_RANGE = CONST.Q3_TORNADO_RANGE * S;
+      D.Q3_DASH_SPEED = CONST.Q3_DASH_SPEED * S;
+      D.Q3_BODY_R = CONST.Q3_BODY_R * S;
+      D.W_RANGE = 250 * S;
+      D.Q12_RANGE = 450 * S;
+      D.TORNADO_RADIUS = 12 * S;
+    }
+
+    class VisualEffect {
+      constructor(duration) {
+        this.duration = duration;
+        this.elapsed = 0;
+        this.done = false;
+        this.spawnScale = S;
+      }
+
+      update(dt) {
+        this.elapsed += dt;
+        if (this.elapsed >= this.duration) {
+          this.done = true;
+        }
+      }
+
+      progress() {
+        if (this.duration === 0) return 1;
+        return clamp(this.elapsed / this.duration, 0, 1);
+      }
+    }
+
+    class SlashEffect extends VisualEffect {
+      constructor(opts) {
+        super(opts.duration ?? 0.2);
+        this.x = opts.x;
+        this.y = opts.y;
+        this.dir = { x: opts.dir.x, y: opts.dir.y };
+        this.length = opts.length;
+        this.width = opts.width ?? 60;
+        this.color = opts.color ?? '255,255,255';
+      }
+
+      draw(ctx) {
+        if (this.done) return;
+        const pct = this.progress();
+        const scale = S / this.spawnScale;
+        const len = this.length * scale;
+        const width = this.width * scale;
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(Math.atan2(this.dir.y, this.dir.x));
+        ctx.globalAlpha = 1 - pct;
+        ctx.globalCompositeOperation = 'lighter';
+        const gradient = ctx.createLinearGradient(0, -width, 0, width);
+        gradient.addColorStop(0, `rgba(${this.color},0)`);
+        gradient.addColorStop(0.45, `rgba(${this.color},0.95)`);
+        gradient.addColorStop(1, `rgba(${this.color},0)`);
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.moveTo(0, -width);
+        ctx.lineTo(len, 0);
+        ctx.lineTo(0, width);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    class ConeEffect extends VisualEffect {
+      constructor(opts) {
+        super(opts.duration ?? 0.28);
+        this.x = opts.x;
+        this.y = opts.y;
+        this.dir = { x: opts.dir.x, y: opts.dir.y };
+        this.range = opts.range;
+        this.spread = opts.spread ?? (Math.PI / 6);
+        this.color = opts.color ?? '120,200,255';
+      }
+
+      draw(ctx) {
+        if (this.done) return;
+        const pct = this.progress();
+        const scale = S / this.spawnScale;
+        const radius = this.range * scale * (0.9 + 0.2 * (1 - pct));
+        const spread = this.spread;
+        const angle = Math.atan2(this.dir.y, this.dir.x);
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(angle);
+        ctx.globalAlpha = 0.75 * (1 - pct);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, radius, -spread, spread);
+        ctx.closePath();
+        const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
+        gradient.addColorStop(0, `rgba(${this.color},0.4)`);
+        gradient.addColorStop(1, `rgba(${this.color},0)`);
+        ctx.fillStyle = gradient;
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    class PulseEffect extends VisualEffect {
+      constructor(opts) {
+        super(opts.duration ?? 0.4);
+        this.x = opts.x;
+        this.y = opts.y;
+        this.radius = opts.radius ?? 36;
+        this.lineWidth = opts.lineWidth ?? 4;
+        this.stroke = opts.stroke ?? 'rgba(180,220,255,0.9)';
+        this.fill = opts.fill ?? null;
+      }
+
+      draw(ctx) {
+        if (this.done) return;
+        const pct = this.progress();
+        const scale = S / this.spawnScale;
+        const radius = this.radius * scale * (1 + 0.25 * pct);
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.globalAlpha = 1 - pct;
+        if (this.fill) {
+          ctx.fillStyle = this.fill;
+          ctx.beginPath();
+          ctx.arc(0, 0, radius * 0.85, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.lineWidth = this.lineWidth * scale;
+        ctx.strokeStyle = this.stroke;
+        ctx.beginPath();
+        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    class HitSparkEffect extends VisualEffect {
+      constructor(opts) {
+        super(opts.duration ?? 0.25);
+        this.x = opts.x;
+        this.y = opts.y;
+        this.color = opts.color ?? '255,200,180';
+        this.shards = opts.shards ?? 4;
+      }
+
+      draw(ctx) {
+        if (this.done) return;
+        const pct = this.progress();
+        const scale = S / this.spawnScale;
+        const radius = 26 * scale * (1 - pct * 0.4);
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.globalAlpha = 1 - pct;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = `rgba(${this.color},0.95)`;
+        ctx.lineWidth = 2 * scale;
+        for (let i = 0; i < this.shards; i++) {
+          const angle = (Math.PI * 2 * i) / this.shards + pct * 1.2;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(angle) * radius * 0.2, Math.sin(angle) * radius * 0.2);
+          ctx.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+
+    class EffectSystem {
+      constructor() {
+        this.effects = [];
+      }
+
+      spawnSlash(opts) {
+        this.effects.push(new SlashEffect(opts));
+      }
+
+      spawnCone(opts) {
+        this.effects.push(new ConeEffect(opts));
+      }
+
+      spawnPulse(opts) {
+        this.effects.push(new PulseEffect(opts));
+      }
+
+      spawnHitSpark(opts) {
+        this.effects.push(new HitSparkEffect(opts));
+      }
+
+      update(dt) {
+        this.effects.forEach((fx) => fx.update(dt));
+        this.effects = this.effects.filter((fx) => !fx.done);
+      }
+
+      draw(ctx) {
+        this.effects.forEach((fx) => fx.draw(ctx));
+      }
+
+      reset() {
+        this.effects = [];
+      }
+    }
+
+    const effects = new EffectSystem();
+
+    class Tornado {
+      constructor(owner) {
+        this.owner = owner;
+        this.active = false;
+        this.x = 0;
+        this.y = 0;
+        this.dir = { x: 1, y: 0 };
+        this.travel = 0;
+      }
+
+      spawn(pos, dir) {
+        this.active = true;
+        this.x = pos.x;
+        this.y = pos.y;
+        this.dir = { x: dir.x, y: dir.y };
+        this.travel = 0;
+        effects.spawnPulse({
+          x: pos.x,
+          y: pos.y,
+          radius: 30,
+          stroke: 'rgba(150,220,255,0.8)',
+          fill: 'rgba(80,150,255,0.25)',
+          duration: 0.35
+        });
+      }
+
+      update(t, dt, enemy) {
+        if (!this.active) return;
+        const step = D.Q3_TORNADO_SPEED * dt;
+        this.x += this.dir.x * step;
+        this.y += this.dir.y * step;
+        this.travel += step;
+        if (this.travel >= D.Q3_TORNADO_RANGE) {
+          this.active = false;
+          return;
+        }
+        if (dist(this, enemy) <= D.TORNADO_RADIUS) {
+          enemy.air(t, CONST.Q3_AIR);
+          enemy.hit(CONST.DMG_Q3_T);
+          this.active = false;
+          this.owner.agent?.registerHit('Q3_TORNADO');
+          effects.spawnHitSpark({
+            x: enemy.x,
+            y: enemy.y,
+            color: '170,230,255',
+            shards: 6,
+            duration: 0.3
+          });
+          effects.spawnPulse({
+            x: enemy.x,
+            y: enemy.y,
+            radius: 48,
+            stroke: 'rgba(140,210,255,0.9)',
+            fill: 'rgba(90,160,255,0.25)',
+            duration: 0.35
+          });
+        }
+      }
+
+      draw(ctx) {
+        if (!this.active) return;
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(Math.atan2(this.dir.y, this.dir.x));
+        const scale = 1 + 0.15 * Math.sin(this.travel / (32 * S));
+        const radius = 28 * S * scale;
+        ctx.globalAlpha = 0.85;
+        const grd = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
+        grd.addColorStop(0, 'rgba(150,220,255,0.9)');
+        grd.addColorStop(0.6, 'rgba(90,170,255,0.35)');
+        grd.addColorStop(1, 'rgba(10,40,80,0)');
+        ctx.fillStyle = grd;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, radius * 0.65, radius, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.lineWidth = 2 * S;
+        ctx.strokeStyle = 'rgba(180,240,255,0.6)';
+        ctx.beginPath();
+        ctx.arc(0, 0, radius * 0.7, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    class Player {
+      constructor(opts) {
+        this.name = opts.name;
+        this.color = opts.color;
+        this.accent = opts.accent || '255,255,255';
+        this.agent = opts.agent || null;
+        this.spawn = { x: opts.x, y: opts.y };
+        this.reset();
+      }
+
+      reset() {
+        this.x = this.spawn.x;
+        this.y = this.spawn.y;
+        this.face = { x: 1, y: 0 };
+        this.hp = 100;
+        this.shield = 0;
+        this.cdQ = 0;
+        this.cdW = 0;
+        this.cdE = 0;
+        this.cdR = 0;
+        this.cdF = 0;
+        this.lt = 0;
+        this.ltT = 0;
+        this.mouse = { x: this.x, y: this.y };
+        this.move = null;
+        this.queue = null;
+        this.aa = AA.IDLE;
+        this.aaS = this.aaF = this.aaE = this.nextAA = 0;
+        this.lock = false;
+        this.lockEnd = 0;
+        this.casting = null;
+        this.qStacks = 0;
+        this.qP = QP.IDLE;
+        this.qDir = { x: 1, y: 0 };
+        this.q3End = 0;
+        this.q3Body = false;
+        this.torn = new Tornado(this);
+        this.cc = CC.NONE;
+        this.ccUntil = 0;
+        this.prevDamageTaken = 0;
+      }
+
+      get pos() {
+        return { x: this.x, y: this.y };
+      }
+
+      beginTick() {
+        this.prevDamageTaken = 0;
+      }
+
+      readyQ(t) {
+        return t >= this.cdQ;
+      }
+
+      readyW(t) {
+        return t >= this.cdW;
+      }
+
+      readyF(t) {
+        return t >= this.cdF;
+      }
+
+      tryAA(t, enemy) {
+        if (this.cc !== CC.NONE || this.lock) return false;
+        if (this.aa !== AA.IDLE) return false;
+        if (t < this.nextAA) return false;
+        if (dist(this, enemy) > D.AA_RANGE) return false;
+        this.face = faceFromTo(this, enemy);
+        this.aa = AA.WIND;
+        this.aaS = t;
+        const atkPerSec = CONST.AS_BASE * (1 + this.lt * CONST.LT_PER);
+        const period = 1 / atkPerSec;
+        this.aaF = t + CONST.WINDUP * period;
+        this.aaE = t + period;
+        return true;
+      }
+
+      cancelAA() {
+        if (this.aa === AA.WIND) {
+          this.aa = AA.IDLE;
+          this.aaS = this.aaF = this.aaE = 0;
+        }
+      }
+
+      castQ(t, enemy) {
+        if (!this.readyQ(t) || this.lock || this.cc !== CC.NONE) return false;
+        this.cancelAA();
+        this.face = faceFromTo(this, this.mouse);
+        this.qDir = { x: this.face.x, y: this.face.y };
+        this.lock = true;
+        effects.spawnPulse({
+          x: this.x,
+          y: this.y,
+          radius: 34,
+          stroke: `rgba(${this.accent},0.55)`,
+          fill: `rgba(${this.accent},0.18)`,
+          duration: 0.25
+        });
+        if (this.qStacks >= 2) {
+          this.casting = 'Q3';
+          this.qP = QP.Q3W;
+          this.lockEnd = t + CONST.Q3_CAST;
+          this.qStacks = 0;
+        } else {
+          this.casting = 'Q12';
+          this.qP = QP.Q12W;
+          this.lockEnd = t + CONST.Q12_CAST;
+        }
+        return true;
+      }
+
+      castW(t) {
+        if (!this.readyW(t) || this.lock || this.cc !== CC.NONE) return false;
+        this.cancelAA();
+        this.face = faceFromTo(this, this.mouse);
+        this.casting = 'W';
+        this.lock = true;
+        this.lockEnd = t + 0.30;
+        effects.spawnCone({
+          x: this.x,
+          y: this.y,
+          dir: this.face,
+          range: D.W_RANGE,
+          color: '120,200,255',
+          duration: 0.3
+        });
+        return true;
+      }
+
+      castF(t, enemy) {
+        if (!this.readyF(t) || this.cc !== CC.NONE) return false;
+        const origin = { x: this.x, y: this.y };
+        const dir = faceFromTo(this, this.mouse);
+        const distToMouse = dist(this, this.mouse);
+        const step = Math.min(distToMouse, D.FLASH_RANGE);
+        this.x += dir.x * step;
+        this.y += dir.y * step;
+        const clamped = clampPos(this);
+        this.x = clamped.x;
+        this.y = clamped.y;
+        this.mouse = { x: this.x + dir.x * 10, y: this.y + dir.y * 10 };
+        this.face = { ...dir };
+        this.cdF = t + CONST.FLASH_CD;
+        this.cancelAA();
+        effects.spawnPulse({
+          x: origin.x,
+          y: origin.y,
+          radius: 32,
+          stroke: 'rgba(255,255,255,0.5)',
+          fill: 'rgba(255,255,255,0.18)',
+          duration: 0.22
+        });
+        effects.spawnPulse({
+          x: this.x,
+          y: this.y,
+          radius: 40,
+          stroke: `rgba(${this.accent},0.85)`,
+          fill: `rgba(${this.accent},0.25)`,
+          duration: 0.28
+        });
+        if (this.lock) {
+          if (this.casting === 'Q12' || this.casting === 'Q3' || this.casting === 'W') {
+            // maintain orientation
+          }
+        }
+        if (this.qP === QP.Q3D && this.q3Body) {
+          this.qP = QP.DONE;
+          this.q3Body = false;
+          const distance = dist(this, enemy);
+          if (distance <= D.Q3_BODY_R) {
+            enemy.air(t, CONST.Q3_AIR);
+            enemy.hit(CONST.DMG_Q3_B);
+            this.agent?.registerHit('Q3_FLASH');
+            effects.spawnHitSpark({
+              x: enemy.x,
+              y: enemy.y,
+              color: '200,230,255',
+              shards: 6,
+              duration: 0.3
+            });
+          }
+        }
+        return true;
+      }
+
+      onCastEnd(t, enemy) {
+        this.lock = false;
+        const cast = this.casting;
+        this.casting = null;
+        if (cast === 'Q12') {
+          this.cdQ = t + CONST.Q12_CD;
+          effects.spawnSlash({
+            x: this.x,
+            y: this.y,
+            dir: this.qDir,
+            length: D.Q12_RANGE,
+            width: 70,
+            color: this.cc !== CC.NONE ? '120,120,120' : this.accent,
+            duration: 0.22
+          });
+          if (this.cc !== CC.NONE) {
+            this.qP = QP.DONE;
+            this.agent?.registerMiss();
+          } else {
+            const rel = { x: enemy.x - this.x, y: enemy.y - this.y };
+            const proj = dot(rel, this.qDir);
+            if (proj >= 0 && proj <= D.Q12_RANGE) {
+              enemy.hit(CONST.DMG_Q12);
+              this.qStacks = Math.min(2, this.qStacks + 1);
+              this.agent?.registerHit('Q12');
+              effects.spawnHitSpark({
+                x: enemy.x,
+                y: enemy.y,
+                color: this.accent,
+                shards: 5,
+                duration: 0.25
+              });
+            } else {
+              this.agent?.registerMiss();
+            }
+            this.qP = QP.DONE;
+          }
+        } else if (cast === 'Q3') {
+          this.cdQ = t + CONST.Q12_CD;
+          this.qP = QP.Q3D;
+          this.q3Body = true;
+          this.q3End = t + (D.Q3_TORNADO_RANGE / D.Q3_DASH_SPEED);
+          this.torn.spawn(this.pos, this.qDir);
+          effects.spawnSlash({
+            x: this.x,
+            y: this.y,
+            dir: this.qDir,
+            length: D.Q12_RANGE * 0.9,
+            width: 90,
+            color: this.accent,
+            duration: 0.3
+          });
+          effects.spawnPulse({
+            x: this.x,
+            y: this.y,
+            radius: 44,
+            stroke: `rgba(${this.accent},0.75)`,
+            fill: `rgba(${this.accent},0.22)`,
+            duration: 0.38
+          });
+        } else if (cast === 'W') {
+          this.cdW = t + CONST.W_CD;
+          const rel = { x: enemy.x - this.x, y: enemy.y - this.y };
+          const proj = dot(rel, this.face);
+          if (proj >= 0 && proj <= D.W_RANGE) {
+            enemy.hit(CONST.W_DMG);
+            this.shield += CONST.W_SHIELD;
+            this.agent?.registerHit('W');
+            effects.spawnHitSpark({
+              x: enemy.x,
+              y: enemy.y,
+              color: '170,220,255',
+              shards: 6,
+              duration: 0.3
+            });
+            effects.spawnPulse({
+              x: this.x,
+              y: this.y,
+              radius: 36,
+              stroke: 'rgba(135,220,255,0.85)',
+              fill: 'rgba(80,150,255,0.3)',
+              duration: 0.45
+            });
+          } else {
+            this.agent?.registerMiss();
+          }
+        }
+        if (this.queue) {
+          this.move = this.queue;
+          this.queue = null;
+        }
+      }
+
+      updateQ3(t, dt, enemy) {
+        this.torn.update(t, dt, enemy);
+        if (this.qP !== QP.Q3D || !this.q3Body) return;
+        const step = D.Q3_DASH_SPEED * dt;
+        this.x += this.qDir.x * step;
+        this.y += this.qDir.y * step;
+        const clamped = clampPos(this);
+        this.x = clamped.x;
+        this.y = clamped.y;
+        if (dist(this, enemy) <= D.Q3_BODY_R) {
+          enemy.air(t, CONST.Q3_AIR);
+          enemy.hit(CONST.DMG_Q3_B);
+          this.q3Body = false;
+          this.qP = QP.DONE;
+          this.agent?.registerHit('Q3_BODY');
+          effects.spawnHitSpark({
+            x: enemy.x,
+            y: enemy.y,
+            color: '200,235,255',
+            shards: 7,
+            duration: 0.32
+          });
+          effects.spawnPulse({
+            x: enemy.x,
+            y: enemy.y,
+            radius: D.Q3_BODY_R,
+            stroke: 'rgba(190,235,255,0.9)',
+            fill: 'rgba(120,200,255,0.25)',
+            duration: 0.4
+          });
+        }
+        if (t >= this.q3End) {
+          this.qP = QP.DONE;
+          this.q3Body = false;
+        }
+      }
+
+      air(t, dur) {
+        this.cc = this.cc | CC.AIR;
+        this.ccUntil = Math.max(this.ccUntil, t + dur);
+        this.lock = false;
+        this.casting = null;
+        this.qP = QP.DONE;
+        this.q3Body = false;
+        this.aa = AA.IDLE;
+        effects.spawnPulse({
+          x: this.x,
+          y: this.y,
+          radius: 46,
+          stroke: 'rgba(200,235,255,0.9)',
+          fill: 'rgba(160,210,255,0.25)',
+          duration: dur
+        });
+      }
+
+      hit(dmg) {
+        let remain = dmg;
+        if (this.shield > 0) {
+          const taken = Math.min(this.shield, remain);
+          this.shield -= taken;
+          remain -= taken;
+        }
+        if (remain > 0) {
+          this.hp = Math.max(0, this.hp - remain);
+        }
+        this.prevDamageTaken += dmg;
+        if (dmg > 0) {
+          effects.spawnPulse({
+            x: this.x,
+            y: this.y,
+            radius: 34,
+            stroke: 'rgba(255,90,90,0.7)',
+            fill: 'rgba(255,60,80,0.18)',
+            duration: 0.3
+          });
+        }
+      }
+
+      moveTick(dt) {
+        if (this.cc !== CC.NONE || this.lock) {
+          if (this.move) {
+            this.queue = this.move;
+            this.move = null;
+          }
+          return;
+        }
+        if (!this.move) return;
+        const dest = clampPos(this.move);
+        this.move = dest;
+        const direction = faceFromTo(this, dest);
+        const d = dist(this, dest);
+        const baseStep = D.MS * dt;
+        if (d <= baseStep) {
+          this.x = dest.x;
+          this.y = dest.y;
+          this.move = null;
+        } else {
+          const smoothing = clamp(d / (D.MS * 0.6), 0.45, 1);
+          const step = baseStep * smoothing;
+          this.x += direction.x * step;
+          this.y += direction.y * step;
+        }
+        this.face = direction;
+      }
+
+      updCC(t) {
+        if (this.cc !== CC.NONE && t >= this.ccUntil) {
+          this.cc = CC.NONE;
+        }
+      }
+
+      tick(dt) {
+        if (this.lt > 0) {
+          this.ltT -= dt;
+          if (this.ltT <= 0) {
+            this.lt = 0;
+            this.ltT = 0;
+          }
+        }
+      }
+
+      resolveAA(t, enemy) {
+        if (this.aa === AA.WIND && t >= this.aaF) {
+          this.aa = AA.BACK;
+          enemy.hit(CONST.DMG_AA);
+          this.lt = Math.min(CONST.LT_MAX, this.lt + 1);
+          this.ltT = CONST.LT_DUR;
+          this.agent?.registerHit('AA');
+          effects.spawnHitSpark({
+            x: enemy.x,
+            y: enemy.y,
+            color: this.accent,
+            shards: 4,
+            duration: 0.2
+          });
+        }
+        if (this.aa === AA.BACK && t >= this.aaE) {
+          this.aa = AA.IDLE;
+          this.nextAA = this.aaE;
+        }
+      }
+    }
+
+    class EpisodeStats {
+      constructor() {
+        this.reset();
+      }
+      reset() {
+        this.ticks = 0;
+        this.duration = 0;
+        this.events = [];
+      }
+      addEvent(msg) {
+        this.events.push(`[${simTime.toFixed(2)}] ${msg}`);
+        if (this.events.length > 50) this.events.shift();
+      }
+    }
+
+    class QTableStore {
+      constructor() {
+        this.key = 'yone_q_table_v1';
+        this.data = {};
+        this.load();
+      }
+      load() {
+        try {
+          const raw = localStorage.getItem(this.key);
+          if (raw) {
+            this.data = JSON.parse(raw);
+          }
+        } catch (e) {
+          console.warn('Failed to load Q-table', e);
+        }
+      }
+      save() {
+        try {
+          localStorage.setItem(this.key, JSON.stringify(this.data));
+        } catch (e) {
+          console.warn('Failed to save Q-table', e);
+        }
+      }
+      clear() {
+        this.data = {};
+        this.save();
+      }
+      get(state) {
+        if (!this.data[state]) {
+          this.data[state] = [0, 0, 0, 0, 0, 0, 0];
+        }
+        return this.data[state];
+      }
+    }
+
+    const ACTIONS = ['STOP', 'APPROACH', 'RETREAT', 'AA', 'Q', 'W', 'FLASH'];
+
+    class RLAgent {
+      constructor(name, enemyGetter) {
+        this.name = name;
+        this.enemyGetter = enemyGetter;
+        this.table = sharedQTable;
+        this.epsilon = 0.1;
+        this.alpha = 0.1;
+        this.gamma = 0.95;
+        this.lastState = null;
+        this.lastAction = null;
+        this.training = true;
+        this.rewardBuffer = 0;
+        this.hitFlag = 0;
+        this.missFlag = 0;
+      }
+
+      toggleTraining() {
+        this.training = !this.training;
+      }
+
+      getState(self, enemy) {
+        const d = dist(self, enemy) / (S * 800);
+        let bucket = 4;
+        if (d < 0.15) bucket = 0;
+        else if (d < 0.30) bucket = 1;
+        else if (d < 0.45) bucket = 2;
+        else if (d < 0.60) bucket = 3;
+        const qReady = self.readyQ(simTime) ? 1 : 0;
+        const wReady = self.readyW(simTime) ? 1 : 0;
+        const fReady = self.readyF(simTime) ? 1 : 0;
+        const qs = self.qStacks;
+        const air = enemy.cc & CC.AIR ? 1 : 0;
+        return `d${bucket}_Q${qReady}_W${wReady}_F${fReady}_qs${qs}_air${air}`;
+      }
+
+      decide(self, enemy) {
+        const state = this.getState(self, enemy);
+        const qValues = this.table.get(state);
+        let actionIndex;
+        if (this.training && Math.random() < this.epsilon) {
+          actionIndex = Math.floor(Math.random() * ACTIONS.length);
+        } else {
+          let maxQ = -Infinity;
+          actionIndex = 0;
+          for (let i = 0; i < qValues.length; i++) {
+            if (qValues[i] > maxQ) {
+              maxQ = qValues[i];
+              actionIndex = i;
+            }
+          }
+        }
+        this.executeAction(actionIndex, self, enemy);
+        this.lastState = state;
+        this.lastAction = actionIndex;
+        return actionIndex;
+      }
+
+      executeAction(idx, self, enemy) {
+        const action = ACTIONS[idx];
+        switch (action) {
+          case 'STOP':
+            self.move = null;
+            break;
+          case 'APPROACH':
+            self.move = { x: enemy.x, y: enemy.y };
+            break;
+          case 'RETREAT': {
+            const dir = norm({ x: self.x - enemy.x, y: self.y - enemy.y });
+            const target = {
+              x: self.x + dir.x * 300 * S,
+              y: self.y + dir.y * 300 * S
+            };
+            self.move = clampPos(target);
+            break;
+          }
+          case 'AA':
+            self.tryAA(simTime, enemy);
+            break;
+          case 'Q':
+            self.mouse = { x: enemy.x, y: enemy.y };
+            self.castQ(simTime, enemy);
+            break;
+          case 'W':
+            self.mouse = { x: enemy.x, y: enemy.y };
+            self.castW(simTime);
+            break;
+          case 'FLASH': {
+            self.mouse = { x: enemy.x, y: enemy.y };
+            self.castF(simTime, enemy);
+            break;
+          }
+        }
+      }
+
+      registerHit(skill) {
+        this.hitFlag += 1;
+      }
+
+      registerMiss() {
+        this.missFlag += 1;
+      }
+
+      onTickEnd(self, enemy) {
+        if (!this.training || this.lastState === null || this.lastAction === null) {
+          this.rewardBuffer = 0;
+          this.hitFlag = 0;
+          this.missFlag = 0;
+          if (!this.training) {
+            this.lastState = null;
+            this.lastAction = null;
+          }
+          return;
+        }
+        const reward = this.computeReward(self, enemy);
+        const nextState = this.getState(self, enemy);
+        const qValues = this.table.get(this.lastState);
+        const nextQ = this.table.get(nextState);
+        const maxNext = Math.max(...nextQ);
+        const old = qValues[this.lastAction];
+        const updated = lerp(old, reward + this.gamma * maxNext, this.alpha);
+        qValues[this.lastAction] = updated;
+        this.table.data[this.lastState] = qValues;
+        this.rewardBuffer = 0;
+        this.hitFlag = 0;
+        this.missFlag = 0;
+        this.lastState = nextState;
+        this.lastAction = null;
+      }
+
+      computeReward(self, enemy) {
+        const enemyDamage = enemy.prevDamageTaken;
+        const selfDamage = self.prevDamageTaken;
+        let reward = (enemyDamage - selfDamage) * 0.05;
+        if (this.hitFlag > 0) reward += 0.02 * this.hitFlag;
+        if (this.missFlag > 0) reward -= 0.01 * this.missFlag;
+        return reward;
+      }
+
+      terminalReward(value) {
+        if (!this.training || this.lastState === null || this.lastAction === null) {
+          this.lastState = null;
+          this.lastAction = null;
+          return;
+        }
+        const qValues = this.table.get(this.lastState);
+        const old = qValues[this.lastAction];
+        const updated = lerp(old, value, this.alpha);
+        qValues[this.lastAction] = updated;
+        this.table.data[this.lastState] = qValues;
+        this.lastState = null;
+        this.lastAction = null;
+        this.hitFlag = 0;
+        this.missFlag = 0;
+      }
+    }
+
+    class DummyAgent {
+      constructor(name) {
+        this.name = name;
+      }
+      decide(self, enemy) {
+        self.mouse = { x: enemy.x, y: enemy.y };
+        if (dist(self, enemy) > D.AA_RANGE * 0.8) {
+          self.move = { x: enemy.x, y: enemy.y };
+        } else {
+          self.move = null;
+        }
+        self.tryAA(simTime, enemy);
+        if (self.readyQ(simTime)) self.castQ(simTime, enemy);
+        if (self.readyW(simTime)) self.castW(simTime);
+      }
+      onTickEnd() {}
+    }
+
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const hud = document.getElementById('hud');
+    const logPanel = document.getElementById('log');
+    const btnReset = document.getElementById('btn-reset');
+    const btnToggle = document.getElementById('btn-toggle-train');
+    const btnClear = document.getElementById('btn-clear-q');
+
+    const sharedQTable = new QTableStore();
+
+    let simTime = 0;
+    let episodeId = 0;
+    let episodeStats = new EpisodeStats();
+
+    function resizeCanvas() {
+      const ratio = BASE.W / BASE.H;
+      const width = Math.min(window.innerWidth - 40, 1100);
+      const height = width / ratio;
+      canvas.width = width;
+      canvas.height = height;
+      VIEW.W = width;
+      VIEW.H = height;
+    }
+
+    const agents = [];
+    let player1, player2;
+
+    function createPlayers() {
+      const agent1 = new RLAgent('Yone A');
+      const agent2 = new RLAgent('Yone B');
+      agent1.enemyGetter = () => player2;
+      agent2.enemyGetter = () => player1;
+      agents[0] = agent1;
+      agents[1] = agent2;
+      player1 = new Player({
+        name: 'Yone A',
+        color: 'rgba(255,80,80,0.9)',
+        accent: '255,120,140',
+        x: canvas.width * 0.25,
+        y: canvas.height * 0.5,
+        agent: agent1
+      });
+      player2 = new Player({
+        name: 'Yone B',
+        color: 'rgba(80,160,255,0.9)',
+        accent: '120,185,255',
+        x: canvas.width * 0.75,
+        y: canvas.height * 0.5,
+        agent: agent2
+      });
+    }
+
+    function resetPlayers() {
+      player1.reset();
+      player2.reset();
+      player1.x = canvas.width * 0.25;
+      player1.y = canvas.height * 0.5;
+      player2.x = canvas.width * 0.75;
+      player2.y = canvas.height * 0.5;
+      player1.face = { x: 1, y: 0 };
+      player2.face = { x: -1, y: 0 };
+      simTime = 0;
+      episodeStats.reset();
+      episodeId += 1;
+      effects.reset();
+      agents.forEach((agent) => {
+        if (agent) {
+          if ('lastState' in agent) agent.lastState = null;
+          if ('lastAction' in agent) agent.lastAction = null;
+        }
+      });
+    }
+
+    function updateHUD() {
+      const blocks = [player1, player2].map((p) => {
+        const hpPct = clamp(p.hp / 100, 0, 1);
+        const totalPct = clamp((p.hp + p.shield) / 100, 0, 1);
+        const shieldPct = Math.max(0, totalPct - hpPct);
+        const cdBlock = (label, cdValue, base) => {
+          const remaining = Math.max(0, cdValue - simTime);
+          const ratio = clamp(remaining / base, 0, 1);
+          const state = remaining > 0 ? `${remaining.toFixed(1)}s` : 'Ready';
+          return `
+            <div class="cd-cell">
+              <div class="cd-label">${label} • ${state}</div>
+              <div class="cd-track">
+                <div class="cd-fill" style="width:${(ratio * 100).toFixed(1)}%"></div>
+              </div>
+            </div>
+          `;
+        };
+        const ltPips = Array.from({ length: CONST.LT_MAX }, (_, idx) => {
+          const active = idx < p.lt ? ' active' : '';
+          return `<div class="lt-pip${active}"></div>`;
+        }).join('');
+        return `
+          <div class="hud-block">
+            <div class="hud-header">
+              <span>${p.name}</span>
+              <span>Q Stacks: ${p.qStacks}</span>
+            </div>
+            <div class="hp-bar">
+              <div class="hp-fill" style="width:${(hpPct * 100).toFixed(1)}%"></div>
+              <div class="shield-fill" style="width:${((hpPct + shieldPct) * 100).toFixed(1)}%"></div>
+              <div class="hp-text">${p.hp.toFixed(1)} / 100 HP</div>
+            </div>
+            <div class="lt-row">
+              <span>치명적 속도</span>
+              <span>${p.ltT.toFixed(1)}s</span>
+            </div>
+            <div class="lt-pips">${ltPips}</div>
+            <div class="cooldown-grid">
+              ${cdBlock('Q', p.cdQ, CONST.Q12_CD)}
+              ${cdBlock('W', p.cdW, CONST.W_CD)}
+              ${cdBlock('F', p.cdF, CONST.FLASH_CD)}
+            </div>
+          </div>
+        `;
+      });
+      hud.innerHTML = blocks.join('');
+    }
+
+    function drawPlayer(p) {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      const bodyRadius = 22 * S;
+      const glow = ctx.createRadialGradient(0, 0, bodyRadius * 0.3, 0, 0, bodyRadius);
+      glow.addColorStop(0, 'rgba(255,255,255,0.45)');
+      glow.addColorStop(0.4, p.color);
+      glow.addColorStop(1, 'rgba(5,8,16,0.85)');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(0, 0, bodyRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.lineWidth = 2 * S;
+      ctx.strokeStyle = `rgba(${p.accent},0.6)`;
+      ctx.stroke();
+      ctx.lineWidth = 3 * S;
+      ctx.strokeStyle = `rgba(${p.accent},0.85)`;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(p.face.x * 30 * S, p.face.y * 30 * S);
+      ctx.stroke();
+      if (p.shield > 0) {
+        ctx.strokeStyle = 'rgba(120,220,255,0.7)';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(0, 0, 24 * S, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+      const barWidth = 96 * S;
+      const barHeight = 10 * S;
+      const barX = p.x - barWidth / 2;
+      const barY = p.y - 32 * S;
+      const hpRatio = clamp(p.hp / 100, 0, 1);
+      const totalRatio = clamp((p.hp + p.shield) / 100, 0, 1);
+      const shieldRatio = Math.max(0, totalRatio - hpRatio);
+      ctx.save();
+      ctx.globalAlpha = 0.95;
+      ctx.fillStyle = 'rgba(5, 8, 16, 0.8)';
+      ctx.fillRect(barX, barY, barWidth, barHeight);
+      ctx.fillStyle = 'rgba(250,90,96,0.95)';
+      ctx.fillRect(barX, barY, barWidth * hpRatio, barHeight);
+      if (shieldRatio > 0) {
+        ctx.fillStyle = 'rgba(135,210,255,0.85)';
+        ctx.fillRect(barX + barWidth * hpRatio, barY, barWidth * shieldRatio, barHeight);
+      }
+      ctx.lineWidth = 1.5 * S;
+      ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+      ctx.strokeRect(barX, barY, barWidth, barHeight);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `${10 * S}px "Segoe UI", Tahoma`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(`${Math.round(p.hp)} HP`, p.x, barY - 2 * S);
+      ctx.restore();
+    }
+
+    function drawHUD() {
+      updateHUD();
+    }
+
+    function drawBackground() {
+      ctx.save();
+      ctx.fillStyle = '#121623';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+      for (let x = 0; x <= canvas.width; x += 100 * S) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= canvas.height; y += 100 * S) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+      const diagonal = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      diagonal.addColorStop(0, 'rgba(255,90,90,0.08)');
+      diagonal.addColorStop(1, 'rgba(90,150,255,0.08)');
+      ctx.fillStyle = diagonal;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+      ctx.lineWidth = 2 * S;
+      ctx.beginPath();
+      ctx.moveTo(canvas.width / 2, 0);
+      ctx.lineTo(canvas.width / 2, canvas.height);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function log(msg) {
+      episodeStats.addEvent(msg);
+      logPanel.textContent = episodeStats.events.join('\n');
+      logPanel.scrollTop = logPanel.scrollHeight;
+    }
+
+    function aiDecision() {
+      player1.agent.decide(player1, player2);
+      player2.agent.decide(player2, player1);
+    }
+
+    function movement(dt) {
+      player1.moveTick(dt);
+      player2.moveTick(dt);
+      applySeparation();
+    }
+
+    function applySeparation() {
+      const minDist = 48 * S;
+      const between = dist(player1, player2);
+      if (between > 0 && between < minDist) {
+        const overlap = (minDist - between) / 2;
+        const dir = faceFromTo(player2, player1);
+        player1.x += dir.x * overlap;
+        player1.y += dir.y * overlap;
+        player2.x -= dir.x * overlap;
+        player2.y -= dir.y * overlap;
+        const clamp1 = clampPos(player1);
+        player1.x = clamp1.x;
+        player1.y = clamp1.y;
+        const clamp2 = clampPos(player2);
+        player2.x = clamp2.x;
+        player2.y = clamp2.y;
+      }
+    }
+
+    function castEnd() {
+      if (player1.lock && simTime >= player1.lockEnd) {
+        player1.onCastEnd(simTime, player2);
+      }
+      if (player2.lock && simTime >= player2.lockEnd) {
+        player2.onCastEnd(simTime, player1);
+      }
+    }
+
+    function updateQ3(dt) {
+      player1.updateQ3(simTime, dt, player2);
+      player2.updateQ3(simTime, dt, player1);
+    }
+
+    function resolveAA() {
+      player1.resolveAA(simTime, player2);
+      player2.resolveAA(simTime, player1);
+    }
+
+    function updateStates(dt) {
+      player1.tick(dt);
+      player2.tick(dt);
+      player1.updCC(simTime);
+      player2.updCC(simTime);
+    }
+
+    function checkEnd() {
+      if (player1.hp <= 0 || player2.hp <= 0) {
+        let message = 'Draw';
+        let reward1 = 0;
+        let reward2 = 0;
+        if (player1.hp > player2.hp) {
+          message = `${player1.name} wins!`;
+          reward1 = 1;
+          reward2 = -1;
+        } else if (player2.hp > player1.hp) {
+          message = `${player2.name} wins!`;
+          reward1 = -1;
+          reward2 = 1;
+        }
+        log(message);
+        player1.agent?.terminalReward(reward1);
+        player2.agent?.terminalReward(reward2);
+        sharedQTable.save();
+        resetPlayers();
+      }
+    }
+
+    function tick() {
+      player1.beginTick();
+      player2.beginTick();
+      aiDecision();
+      movement(STEP);
+      castEnd();
+      updateQ3(STEP);
+      resolveAA();
+      updateStates(STEP);
+      effects.update(STEP);
+      player1.agent.onTickEnd(player1, player2);
+      player2.agent.onTickEnd(player2, player1);
+      checkEnd();
+      simTime += STEP;
+      episodeStats.ticks += 1;
+      episodeStats.duration += STEP;
+    }
+
+    function render() {
+      drawBackground();
+      player1.torn.draw(ctx);
+      player2.torn.draw(ctx);
+      drawPlayer(player1);
+      drawPlayer(player2);
+      effects.draw(ctx);
+      drawHUD();
+    }
+
+    function loop() {
+      tick();
+      render();
+      requestAnimationFrame(loop);
+    }
+
+    function init() {
+      resizeCanvas();
+      applyScale();
+      createPlayers();
+      resetPlayers();
+      render();
+      requestAnimationFrame(loop);
+    }
+
+    window.addEventListener('resize', () => {
+      resizeCanvas();
+      applyScale();
+    });
+
+    btnReset.addEventListener('click', () => {
+      resetPlayers();
+      log('Manual reset');
+    });
+
+    btnToggle.addEventListener('click', () => {
+      agents.forEach((agent) => {
+        if (agent.toggleTraining) agent.toggleTraining();
+      });
+      const state = agents[0].training ? 'ON' : 'OFF';
+      log(`Training toggled ${state}`);
+    });
+
+    btnClear.addEventListener('click', () => {
+      sharedQTable.clear();
+      log('Cleared Q-table');
+    });
+
+    init();
+  </script>
+</body>
+</html>
